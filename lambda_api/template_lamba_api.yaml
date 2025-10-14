@@ -1,0 +1,102 @@
+
+AWSTemplateFormatVersion: "2010-09-09" # Template version
+
+Parameters:
+  apiName:
+    Type: String
+    Default: MyRestApi
+    Description: Logical name shown in API Gateway Console
+  type:
+    Type: String
+    Default: REGIONAL
+    AllowedValues: [REGIONAL, EDGE, PRIVATE]
+    Description : API endpoint type
+  stageName:
+    Type: String
+    Default: v1
+    Description: Stage name exposed in the invoke URL
+
+Resources:   
+  MyLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: # defines who can assume this role
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: [lambda.amazonaws.com] } #mean only lamba can assume
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+    #ARN role, it give a permission to this function
+      Role: !GetAtt MyLambdaRole.Arn
+      Runtime: python3.12
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {
+                  "statusCode": 200,
+                  "headers": {"Content-Type": "application/json"},
+                  "body": json.dumps({"message": "Hello world!"})
+              }
+      Tags: #Identify this function in the console
+        - Key: Name
+          Value: MyLambdaFunction
+
+  MyLambdaRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref apiName 
+      EndpointConfiguration:
+        Types: [ !Ref type ]
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref MyLambdaRestApi
+      ParentId: !GetAtt MyLambdaRestApi.RootResourceId
+      PathPart: hello
+
+  ApiGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MyLambdaRestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction.Arn}/invocations
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MyLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyLambdaRestApi}/*/GET/hello
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGetMethod #Ensure method exists before deploying
+    Properties:
+      RestApiId: !Ref MyLambdaRestApi
+      StageName: !Ref stageName
+
+Outputs:
+  HelloUrl:
+    Description: Invoke URL for GET /hello
+    Value: !Sub https://${MyLambdaRestApi}.execute-api.${AWS::Region}.amazonaws.com/${stageName}/hello
+   
+
+ 
+
+
