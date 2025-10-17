@@ -13,7 +13,7 @@ Parameters:
     Description : API endpoint type
   stageName:
     Type: String
-    Default: v1
+    Default: v2  #Indicates the versions that the template has
     Description: Stage name exposed in the invoke URL
 
 Resources:   
@@ -24,7 +24,9 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Principal: { Service: [lambda.amazonaws.com] } #mean only lamba can assume
+            Principal: 
+              Service: 
+                - lambda.amazonaws.com #mean only lamba can assume
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
